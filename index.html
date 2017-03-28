@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<meta charset="UTF-8">
+<style>
+
+.node circle {
+  fill: #fff;
+  stroke: steelblue;
+  stroke-width: 3px;
+}
+
+.node text {
+  font: 12px sans-serif;
+}
+
+.link {
+  fill: none;
+  stroke: #ccc;
+  stroke-width: 2px;
+}
+
+</style>
+
+<body>
+
+<!-- load the d3.js library -->
+<script src="https://d3js.org/d3.v4.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/superagent/3.5.2/superagent.min.js"></script>
+<script>
+
+setTimeout(function () {go(root)}, 10);
+
+function go (initialData) {
+  treeData = initialData
+
+  // Set the dimensions and margins of the diagram
+  var margin = {top: 20, right: 90, bottom: 30, left: 90},
+      width = 960 - margin.left - margin.right,
+      height = 500 - margin.top - margin.bottom;
+
+  // append the svg object to the body of the page
+  // appends a 'group' element to 'svg'
+  // moves the 'group' element to the top left margin
+  var svg = d3.select("body").append("svg")
+      .attr("width", width + margin.right + margin.left)
+      .attr("height", height + margin.top + margin.bottom)
+    .append("g")
+      .attr("transform", "translate("
+            + margin.left + "," + margin.top + ")");
+
+  var i = 0,
+      duration = 750,
+      root;
+
+  // declares a tree layout and assigns the size
+  var treemap = d3.tree().size([height, width]);
+
+  // Assigns parent, children, height, depth
+  root = d3.hierarchy(treeData, function(d) { return d.children; });
+  root.x0 = height / 2;
+  root.y0 = 0;
+
+  // Collapse after the second level
+  root.children.forEach(collapse);
+
+  update(root);
+
+  // Collapse the node and all it's children
+  function collapse(d) {
+    if(d.children) {
+      d._children = d.children
+      d._children.forEach(collapse)
+      d.children = null
+    }
+  }
+
+  function update(source) {
+
+    // Assigns the x and y position for the nodes
+    var treeData = treemap(root);
+
+    // Compute the new tree layout.
+    var nodes = treeData.descendants(),
+        links = treeData.descendants().slice(1);
+
+    // Normalize for fixed-depth.
+    nodes.forEach(function(d){ d.y = d.depth * 180});
+
+    // ****************** Nodes section ***************************
+
+    // Update the nodes...
+    var node = svg.selectAll('g.node')
+        .data(nodes, function(d) {return d.id || (d.id = ++i); });
+
+    // Enter any new modes at the parent's previous position.
+    var nodeEnter = node.enter().append('g')
+        .attr('class', 'node')
+        .attr("transform", function(d) {
+          return "translate(" + source.y0 + "," + source.x0 + ")";
+      })
+      .on('click', click);
+
+    // Add Circle for the nodes
+    nodeEnter.append('circle')
+        .attr('class', 'node')
+        .attr('r', 1e-6)
+        .style("fill", function(d) {
+            return d._children ? "lightsteelblue" : "#fff";
+        });
+
+    // Add labels for the nodes
+    nodeEnter.append('text')
+        .attr("dy", ".35em")
+        .attr("x", function(d) {
+            return d.children || d._children ? -13 : 13;
+        })
+        .attr("text-anchor", function(d) {
+            return d.children || d._children ? "end" : "start";
+        })
+        .text(function(d) { return d.data.name; });
+
+    // UPDATE
+    var nodeUpdate = nodeEnter.merge(node);
+
+    // Transition to the proper position for the node
+    nodeUpdate.transition()
+      .duration(duration)
+      .attr("transform", function(d) {
+          return "translate(" + d.y + "," + d.x + ")";
+       });
+
+    // Update the node attributes and style
+    nodeUpdate.select('circle.node')
+      .attr('r', 10)
+      .style("fill", function(d) {
+          return d._children ? "lightsteelblue" : "#fff";
+      })
+      .attr('cursor', 'pointer');
+
+
+    // Remove any exiting nodes
+    var nodeExit = node.exit().transition()
+        .duration(duration)
+        .attr("transform", function(d) {
+            return "translate(" + source.y + "," + source.x + ")";
+        })
+        .remove();
+
+    // On exit reduce the node circles size to 0
+    nodeExit.select('circle')
+      .attr('r', 1e-6);
+
+    // On exit reduce the opacity of text labels
+    nodeExit.select('text')
+      .style('fill-opacity', 1e-6);
+
+    // ****************** links section ***************************
+
+    // Update the links...
+    var link = svg.selectAll('path.link')
+        .data(links, function(d) { return d.id; });
+
+    // Enter any new links at the parent's previous position.
+    var linkEnter = link.enter().insert('path', "g")
+        .attr("class", "link")
+        .attr('d', function(d){
+          var o = {x: source.x0, y: source.y0}
+          return diagonal(o, o)
+        });
+
+    // UPDATE
+    var linkUpdate = linkEnter.merge(link);
+
+    // Transition back to the parent element position
+    linkUpdate.transition()
+        .duration(duration)
+        .attr('d', function(d){ return diagonal(d, d.parent) });
+
+    // Remove any exiting links
+    var linkExit = link.exit().transition()
+        .duration(duration)
+        .attr('d', function(d) {
+          var o = {x: source.x, y: source.y}
+          return diagonal(o, o)
+        })
+        .remove();
+
+    // Store the old positions for transition.
+    nodes.forEach(function(d){
+      d.x0 = d.x;
+      d.y0 = d.y;
+    });
+
+    // Creates a curved (diagonal) path from parent to the child nodes
+    function diagonal(s, d) {
+
+      path = `M ${s.y} ${s.x}
+              C ${(s.y + d.y) / 2} ${s.x},
+                ${(s.y + d.y) / 2} ${d.x},
+                ${d.y} ${d.x}`
+
+      return path
+    }
+
+    // Toggle children on click.
+    function click(d) {
+      if (d.children) {
+          d._children = d.children;
+          d.children = null;
+        } else {
+          d.children = d._children;
+          d._children = null;
+        }
+      update(d);
+    }
+  }
+}
+
+var root = {"name":"BNC","children":[{"name":"HR","children":[{"name":"Recruiting","children":[{"name":"Volunteer Recruiting - Alpha","children":[{"name":"Haley Zink"},{"name":"Joseph Sackman"},{"name":"Katherine Ryan"},{"name":"Kimberly Konkel"},{"name":"Lydia Faye"},{"name":"Emily Byars"},{"name":"Chiara Giovando"},{"name":"Amanda Walker"},{"name":"John Raeder"}]}]},{"name":"Conference Call","children":[{"name":"Conference Call - Alpha Squad","children":[{"name":"Haley Zink"}]}]},{"name":"Operations","children":[{"name":"Operations - Alpha","children":[{"name":"Paula Dorfman"},{"name":"Jennifer Firm"}]}]}]},{"name":"Technology","children":[{"name":"Technology","children":[{"name":"Technology - Alpha","children":[{"name":"Saikat Chakrabarti"},{"name":"Chadwick Meyer"},{"name":"Derek Hammer"},{"name":"Ben Packer"},{"name":"Travis Kaufman"},{"name":"Daniela Meyer"}]}]}]},{"name":"Communications","children":[{"name":"Writing","children":[{"name":"Writing - Alpha","children":[{"name":"Corbin Trent"},{"name":"Lisa Newcomb"},{"name":"Cory Archibald"},{"name":"Michelle Neuffer"},{"name":"Katharine Flynn"},{"name":"Kathy Levine"},{"name":"Anne Bobby"},{"name":"Michele B. Morgan"},{"name":"Patricia Wilson"},{"name":"Anish Jain"},{"name":"Daniel Benny"},{"name":"Jennifer Dize"},{"name":"Liuba Grechen"},{"name":"Ariel Friel"},{"name":"Holly Hanks"}]}]},{"name":"Facebook","children":[{"name":"Facebook - Alpha","children":[{"name":"Diane Bullock"},{"name":"Shane Wade"},{"name":"Chidimma Ozor"},{"name":"Darrin Solomon"},{"name":"Lauren Swann"},{"name":"Nirali Desai"},{"name":"Sarah Hernandez"}]}]},{"name":"Help Desk","children":[{"name":"Helpdesk - Alpha","children":[{"name":"Ginny Bateman"},{"name":"Leslie Walsh"},{"name":"Steven Cross"},{"name":"Sandy Menor"},{"name":"Spencer Bartlett"},{"name":"Dominic Sigorino"},{"name":"Caitlin Remmel"},{"name":"Ben Potts"},{"name":"Vijay Singh"},{"name":"Colby Zentner"}]}]},{"name":"Press","children":[{"name":"Press - Alpha","children":[{"name":"Saikat Chakrabarti"},{"name":"Corbin Trent"},{"name":"Beth Hoops"},{"name":"John Joseph Kenneth Magee"},{"name":"Damien C. Markham"},{"name":"Yania Padilla"},{"name":"Carl Rempel"},{"name":"Diane Sharp"},{"name":"Carrie Riddle"},{"name":"Adam Huening"},{"name":"Gaston Otero"},{"name":"Ivan Elias"},{"name":"Pamela Chinawah"},{"name":"Andrew Oravecz"},{"name":"Farah Salam"}]}]},{"name":"Design","children":[{"name":"Design - Alpha","children":[{"name":"Hialda Alpizar"},{"name":"Daniela Meyer"},{"name":"Jenni Siri"},{"name":"Annalisa van den Bergh"},{"name":"Brian Rice"},{"name":"Rae Shaffer"},{"name":"Allen Boitz"},{"name":"Lisa Newcomb"},{"name":"Jeffrey Saks"},{"name":"Kristin Mozes"},{"name":"Steve Byram"},{"name":"Ellie Adam"},{"name":"Emilee Kieffer"},{"name":"Amy Saaed"},{"name":"Christian Dovel"},{"name":"wylder tomlinson"},{"name":"Dilhan Kushan"},{"name":"Danielle Combis Arteaga"}]}]},{"name":"Twitter","children":[{"name":"Twitter - Alpha","children":[{"name":"Diane Bullock"},{"name":"Erin Neckers"},{"name":"Lynne Hayes"},{"name":"Kevin Bates"},{"name":"Miles Goodrich"},{"name":"Erika Abdelatif"},{"name":"Rob Harrol"},{"name":"Aaron Bowersock"},{"name":"Anthony Garcia"},{"name":"Brian Bennett"},{"name":"Karl Haas"},{"name":"Brian Brinker"}]}]},{"name":"Speakers","children":[{"name":"Speakers - Alpha Squad","children":[{"name":"Corbin Trent"},{"name":"Patric Taylor"}]}]},{"name":"Online Store","children":[{"name":"Online Store"}]},{"name":"Social Media"}]},{"name":"Candidate Recruiting","children":[{"name":"Round 1","children":[{"name":"Round 1 - Alpha","children":[{"name":"Amy Madsen"},{"name":"Tristan Shepherd"},{"name":"Benjamin Hernandez"},{"name":"Neil Turner"},{"name":"Alexandra Rojas"},{"name":"Matt Lembo"},{"name":"Susan Labandibar"},{"name":"Prem Chandrasekaran"},{"name":"Heather Stein"},{"name":"Bharti Rupani"}]},{"name":"Round 1 - Beta","children":[{"name":"Adam White"},{"name":"Alexandra Rojas"},{"name":"Betsy Liano"},{"name":"Rachel Fredericks"},{"name":"Michele Downing"},{"name":"Mary Douglas"},{"name":"Julie Melton"},{"name":"Chris Taylor"},{"name":"Jonathan Fields"},{"name":"Larry DeGaris"},{"name":"Gabrielle Webster"}]},{"name":"Round 1 - Gamme","children":[{"name":"BB Banks"},{"name":"Mandy Macagain"},{"name":"David Rainey"},{"name":"Victoria Hewlett"},{"name":"Karina Brown"},{"name":"Chase Kessinger"},{"name":"Daniel Benny"}]},{"name":"Round 1 - Delta","children":[{"name":"Crystal Thomas "},{"name":"Charley Lanning"},{"name":"Danielle Buttke"},{"name":"Angel D'Angelo"},{"name":"Elena Novak"},{"name":"Ananda Tomas"},{"name":"Kevin Burgos"},{"name":"Paul Peña"},{"name":"Rosalie Wade"}]}]},{"name":"Round 2","children":[{"name":"Round 2 - Alpha","children":[{"name":"Cynthia Panas"},{"name":"Emily Davis"},{"name":"Karlos Garcia"},{"name":"Levon Dunn "},{"name":"Micha Liberman"},{"name":"Andi Duncan"},{"name":"Rachel Thiel"},{"name":"Patrice Riley "}]},{"name":"Round 2 - Beta","children":[{"name":"Cole Manchester"},{"name":"Jordan Allen"},{"name":"Mark Kushneir"},{"name":"Habeeb Makhoul"},{"name":"Betsy Rosenthal"},{"name":"Jonah Parzen-Johnson"},{"name":"Holden Hollister"}]},{"name":"Round 2 - Gamma","children":[{"name":"Caitlin Hatfield"},{"name":"Carlo Maria Ampil"},{"name":"Anna Wolfe"}]},{"name":"Round 2 - Delta"}]},{"name":"Round 4","children":[{"name":"Round 4 - Alpha","children":[{"name":"Mary Nishimuta"},{"name":"Nasim Thompson"},{"name":"Saikat Chakrabarti"},{"name":"Isra Allison"},{"name":"Alison Symons"},{"name":"Jordan Lovinger"}]},{"name":"Round 4 - Beta","children":[{"name":"Taylor Apodaca"}]}]},{"name":"Round 0","children":[{"name":"Round 0 - Alpha","children":[{"name":"Adam White"},{"name":"Chase Kessinger"},{"name":"Rachel Fredericks"},{"name":"Chris Taylor"},{"name":"Dai Newman"},{"name":"Emma Northcot"},{"name":"Patrick Hopkins"},{"name":"Jonathan Fields"},{"name":"Mandy Macagain"},{"name":"Patrick Helper-Ferris"},{"name":"Leslie Neal"},{"name":"Sharon Davis"},{"name":"Simone Liano"},{"name":"Larry DeGaris"},{"name":"Don Slatt"},{"name":"Toby Bonitz"},{"name":"Julie Melton"},{"name":"Michele Downing"}]}]}]},{"name":"Local Campaigns","children":[{"name":"MO-01","children":[{"name":"MO-01","children":[{"name":"Brendan Ziebarth"}]}]}]},{"name":"Platform","children":[{"name":"Platform","children":[{"name":"Platform - Alpha","children":[{"name":"Zack Exley"},{"name":"Liam Clive"},{"name":"Ron Stubblefield"},{"name":"Benjamin Clayton"}]}]}]},{"name":"Candidate Support","children":[{"name":"Candidate Training","children":[{"name":"Candidate Training - Alpha","children":[{"name":"Sam Briggs"},{"name":"Chris Noble"},{"name":"Heather Julian"},{"name":"Liuba Grechen"},{"name":"Ariel Friel"},{"name":"Ansley Rawlins"}]}]},{"name":"Candidate Coaching"}]}]}
+
+</script>
+</body>

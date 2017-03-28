@@ -35,3 +35,10 @@ jspm_packages
 
 # Optional REPL history
 .node_repl_history
+
+# Data dump
+groups.json
+teams.json
+squads.json
+root.json
+people.json

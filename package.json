@@ -1,0 +1,31 @@
+{
+  "name": "org-chart",
+  "version": "1.0.0",
+  "description": "Generate D3 \"collapsible tree\" org chart from airtable data",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BrandNewCongress/org-chart.git"
+  },
+  "keywords": [
+    "d3",
+    "airtable",
+    "organization"
+  ],
+  "author": "ben-pr-p",
+  "license": "AGPL-3.0",
+  "bugs": {
+    "url": "https://github.com/BrandNewCongress/org-chart/issues"
+  },
+  "homepage": "https://github.com/BrandNewCongress/org-chart#readme",
+  "dependencies": {
+    "airtable": "^0.4.5",
+    "browserify": "^14.1.0",
+    "d3": "^4.7.4",
+    "gulp": "^3.9.1",
+    "pug": "^2.0.0-beta11"
+  }
+}
